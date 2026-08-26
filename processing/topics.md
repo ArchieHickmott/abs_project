@@ -1,0 +1,62 @@
+G01	Selected person characteristics by sex	
+G32	Total family income (weekly) by family composition
+G02	Selected medians and averages	
+G33	Total household income (weekly) by household composition
+G03	Place of usual residence by place of enumeration on Census Night by age	
+G34	Number of motor vehicles by dwellings
+G04	Age by sex	
+G35	Household composition by number of persons usually resident
+G05	Registered marital status by age by sex	
+G36	Dwelling structure
+G06	Social marital status by age by sex	
+G37	Tenure and landlord type by dwelling structure
+G07	Indigenous status by age by sex 	
+G38	Mortgage repayment (monthly) by dwelling structure
+G08	Ancestry by country of birth of parents	
+G39	Mortgage repayment (monthly) by family composition
+G09	Country of birth of person by age by sex	
+G40	Rent (weekly) by landlord type
+G10	Country of birth of person by year of arrival in Australia	
+G41	Dwelling structure by number of bedrooms
+G11	Proficiency in spoken English by year of arrival in Australia by age	
+G42	Dwelling structure by household composition and family composition
+G12	Proficiency in spoken English of parents by age of dependent children	
+G43	Selected labour force, education and migration characteristics by sex
+G13	Language used at home by proficiency in spoken English by sex	
+G44	Place of usual residence 1 year ago by sex
+G14	Religious affiliation by sex	
+G45	Place of usual residence 5 years ago by sex
+G15	Type of education institution attending (full-time/part-time student status by age) by sex	
+G46	Labour force status by age by sex
+G16	Highest year of school completed by age by sex	
+G47	Labour force status by sex of parents by age of dependent children for couple families
+G17	Total personal income (weekly) by age by sex	
+G48	Labour force status by sex of parent by age of dependent children for one parent families
+G18	Core activity need for assistance by age by sex	
+G49	Highest non-school qualification: level of education by age by sex
+G19	Type of long-term health condition by age by sex	
+G50	Highest non-school qualification: field of study by age by sex
+G20	Count of selected long-term health conditions by age by sex	
+G51	Highest non-school qualification: field of study by occupation by sex
+G21	Type of long-term health condition by selected person characteristics	
+G52	Highest non-school qualification: level of education by occupation by sex
+G22	Australian Defence Force service by age by sex	
+G53	Highest non-school qualification: level of education by industry of employment by sex
+G23	Voluntary work for an organisation or group by age by sex	
+G54	Industry of employment by age by sex
+G24	Unpaid domestic work: number of hours by age by sex	
+G55	Industry of employment by hours worked by sex
+G25	Unpaid assistance to a person with a disability, health condition or due to old age by age by sex	
+G56	Industry of employment by occupation
+G26	Unpaid child care by age by sex	
+G57	Total family income (weekly) by labour force status of partners for couple families with no children
+G27	Relationship in household by age by sex	
+G58	Total family income (weekly) by labour force status of parents/partners for couple families with children
+G28	Number of children ever born	
+G59	Total family income (weekly) by labour force status of parent for one parent families
+G29	Family composition	
+G60	Occupation by age by sex
+G30	Family composition and country of birth of parents by age of dependent children	
+G61	Occupation by hours worked by sex
+G31	Family blending	
+G62	Method of travel to work by sex

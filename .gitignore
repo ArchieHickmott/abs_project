@@ -1,0 +1,8 @@
+*.db
+data/*
+*.shp
+*.dbf
+*.prj
+*.shx
+*GDA2020.xml
+*.jsonl

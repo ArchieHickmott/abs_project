@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Australia GeoJSON</title>
+
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/maplibre-gl@6.5.0/dist/maplibre-gl.css"
+    />
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        html,
+        body,
+        #map {
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+
+    <script type="module">
+        import * as maplibregl from
+            'https://unpkg.com/maplibre-gl@6.5.0/dist/maplibre-gl.mjs';
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://demotiles.maplibre.org/style.json',
+
+            // Australia
+            center: [133.7751, -25.2744],
+            zoom: 4
+        });
+
+        map.on('load', () => {
+
+            map.addSource('australia', {
+                type: 'geojson',
+                data: '/get-json'
+            });
+
+            map.addLayer({
+                id: 'australia',
+                type: 'fill',
+                source: 'australia',
+
+                paint: {
+                    'fill-color': '#088',
+                    'fill-opacity': 0.8
+                }
+            });
+
+            // Optional: draw an outline around each polygon
+            map.addLayer({
+                id: 'australia-outline',
+                type: 'line',
+                source: 'australia',
+
+                paint: {
+                    'line-color': '#ffffff',
+                    'line-width': 1
+                }
+            });
+        });
+    </script>
+</body>
+</html>
