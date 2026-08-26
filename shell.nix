@@ -2,7 +2,7 @@
 pkgs.mkShell {
   packages = with pkgs; [
     # Python
-    python314Full
+    python313Full
 
     # C / C++
     gcc

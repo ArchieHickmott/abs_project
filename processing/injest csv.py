@@ -4,9 +4,12 @@ import csv, sys, os
 import logging
 import re
 
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, Table, MetaData
 from sqlalchemy import Column, Text, insert
 from sqlalchemy.orm import Session
+
+load_dotenv()
 
 # Configuration
 BATCH_SIZE = 5000
@@ -195,8 +198,7 @@ logger.addHandler(stdout_handler)
 
 # connecting to database
 engine = create_engine(
-    f"sqlite:///C:/Users/Archi/Documents/abs_project/processing/temp.db",
-    connect_args={"check_same_thread": False},
+    os.environ["DATABASE_URL"]
 )
 
 # begin ingestion
