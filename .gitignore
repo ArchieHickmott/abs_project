@@ -6,3 +6,5 @@ data/*
 *.shx
 *GDA2020.xml
 *.jsonl
+*.secrets
+.vscode/*
