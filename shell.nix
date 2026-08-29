@@ -34,9 +34,13 @@ pkgs.mkShell {
     valgrind
 
     httpie
+
+    pgadmin #optional, this is a gui program feel free to comment
   ];
 
-  shellHook = ''
+shellHook = ''
+    # Don't let Nix's Python packages leak into the project venv.
+    unset PYTHONPATH
     export PYTHONNOUSERSITE=1
 
     if [ ! -d .venv ]; then
@@ -48,6 +52,8 @@ pkgs.mkShell {
     echo ""
     echo "Python:"
     python --version
+    echo "Python executable:"
+    which python
 
     echo ""
     echo "C++:"
