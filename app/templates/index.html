@@ -34,11 +34,42 @@
 
         const map = new maplibregl.Map({
             container: 'map',
-            style: 'https://demotiles.maplibre.org/style.json',
+            style: 'https://tiles.openfreemap.org/styles/bright',
 
             // Australia
             center: [133.7751, -25.2744],
             zoom: 4
+        });
+
+        map.on('load', () => {
+
+            map.addSource('australia', {
+                type: 'geojson',
+                data: '/get-json?level={{area_level}}'
+            });
+
+            map.addLayer({
+                id: 'australia',
+                type: 'fill',
+                source: 'australia',
+
+                paint: {
+                    'fill-color': '#088',
+                    'fill-opacity': 0.8
+                }
+            });
+
+            // Optional: draw an outline around each polygon
+            map.addLayer({
+                id: 'australia-outline',
+                type: 'line',
+                source: 'australia',
+
+                paint: {
+                    'line-color': '#ffffff',
+                    'line-width': 1
+                }
+            });
         });
     </script>
 </body>
