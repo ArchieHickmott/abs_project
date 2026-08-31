@@ -45,9 +45,8 @@
 
             map.addSource('australia', {
                 type: 'geojson',
-                data: '/get-json?level={{area_level}}'
-            });
-
+                data: "/get-tilemap?level={{area_level}}"
+            })
             map.addLayer({
                 id: 'australia',
                 type: 'fill',

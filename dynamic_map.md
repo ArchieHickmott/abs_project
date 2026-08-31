@@ -28,6 +28,39 @@ server returns tules and their polygons
 client caches new tiles
 client removes tiles that aren't needed from cache
 
+## Tilemap
+Each statistical area gets its own unique tilemap
+The boundaries for the tilemap can be found with this query:
+```sql
+SELECT ST_XMax(geom) 
+FROM sa4_2021
+WHERE geom IS NOT NULL
+ORDER BY ST_XMax(geom) DESC 
+LIMIT 1;
+
+SELECT ST_XMin(geom) 
+FROM sa4_2021
+WHERE geom IS NOT NULL
+ORDER BY ST_XMax(geom) ASC
+LIMIT 1;
+
+SELECT ST_YMax(geom) 
+FROM sa4_2021
+WHERE geom IS NOT NULL
+ORDER BY ST_XMax(geom) DESC 
+LIMIT 1;
+
+SELECT ST_YMin(geom) 
+FROM sa4_2021
+WHERE geom IS NOT NULL
+ORDER BY ST_XMax(geom) ASC
+LIMIT 1;
+```
+
+For the current data set that a bounding box from (115.75000757470102, -10.41234330991432) to (167.99803924286024, -32.025052941918176)
+
+each tilemap will be constructed such that there is close to an average of 50 polygons per square, with a tolerance of 10 polygons per square (more on that later)
+
 ## Functional Requirements
 ### Backend
 internal util functions

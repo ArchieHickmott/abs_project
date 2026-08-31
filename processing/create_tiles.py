@@ -1,4 +1,5 @@
 import psycopg
+from psycopg import Connection
 from dotenv import load_dotenv
 
 import math
@@ -10,8 +11,8 @@ load_dotenv()
 
 # Initial search interval, INITIAL_INTERVAL[1] must be > INITIAL_INTERVAL[0]
 OPTIMISATION_ACURACY = 5
-INITIAL_INTERVAL: tuple[float, float] = (40, 50)
-INITIAL_SQUARE_LENGTH = 50_000 # kilometers 
+INITIAL_INTERVAL: tuple[float, float] = (290, 310)
+INITIAL_SQUARE_LENGTH = 50_000 # metres
 GOLDEN_RATIO = (1 + math.sqrt(5)) / 2
 
 # Set up logging
@@ -58,25 +59,29 @@ psycopg_logger.setLevel(logging.DEBUG)
 psycopg_logger.addHandler(stdout_handler)
 
 class OptimisationEnginge:
-    _BASE_SQL = """
-        WITH counts AS (
-            SELECT
-                floor((ST_X(centroid) - :x0) / :square_length) AS grid_x,
-                floor((ST_Y(centroid) - :y0) / :square_length) AS grid_y,
-                COUNT(*) AS polygon_count
-            FROM sa1_2021
-            GROUP BY grid_x, grid_y
-        )
-        SELECT
-            AVG(polygon_count),
-            STDDEV_POP(polygon_count),
-            STDDEV_POP(polygon_count) / NULLIF(AVG(polygon_count), 0)
-        FROM counts;
-    """
-
-    def __init__(self, conn):
+    def __init__(self, conn, dataset: Connection):
+        if dataset in ["sa1", "sa2", "sa3", "sa4"]:
+            self.dataset = dataset
+        else:
+            raise ValueError(f"OptimisationEngine.__init__ invalid dataset: {dataset}")
         self._conn = conn
-        self._x0, self._y0 = self._get_origin()
+        x0, y0 = self._get_origin()
+        self._BASE_SQL = f"""
+            WITH counts AS (
+                SELECT
+                    floor((ST_X(centroid) - {x0}) / :square_length) AS grid_x,
+                    floor((ST_Y(centroid) - {y0}) / :square_length) AS grid_y,
+                    COUNT(*) AS polygon_count
+                FROM {dataset}_2021
+                GROUP BY grid_x, grid_y
+            )
+            SELECT
+                AVG(polygon_count),
+                STDDEV_POP(polygon_count),
+                STDDEV_POP(polygon_count) / NULLIF(AVG(polygon_count), 0)
+            FROM counts;
+        """
+        
 
     def _get_origin(self):
         sql = """
@@ -87,10 +92,10 @@ class OptimisationEnginge:
                 SELECT ST_Transform(
                     ST_SetSRID(
                         ST_MakePoint(
-                            115.75000757470102,
+                            105,
                             -10.41234330991432
                         ),
-                        4326
+                        7844
                     ),
                     3577
                 ) AS p
@@ -102,7 +107,7 @@ class OptimisationEnginge:
             return cur.fetchone()
 
     def _statistics(self, square_length: float):
-        sql = self._BASE_SQL.replace(":x0", str(self._x0)).replace(":y0", str(self._y0)).replace(":square_length", str(square_length))
+        sql = self._BASE_SQL.replace(":square_length", str(square_length))
 
         with self._conn.cursor() as cur:
             cur.execute(sql)
@@ -120,11 +125,11 @@ class OptimisationEnginge:
         return self._statistics(square_length)[2]
 
     def calculate_square_length(self): 
-        logger.info("starting optimisation process")
+        logger.info(f"starting optimisation process for dataset: {self.dataset}")
         logger.debug(self._mean(INITIAL_SQUARE_LENGTH))
         bounds = [INITIAL_SQUARE_LENGTH * math.sqrt(goal / self._mean(INITIAL_SQUARE_LENGTH)) 
                                                             for goal in INITIAL_INTERVAL]
-        # logger.debug(bounds)
+
         lower_bound, upper_bound = bounds
         uncertainty_level: float = upper_bound - lower_bound
 
@@ -132,7 +137,7 @@ class OptimisationEnginge:
         x_2 = lower_bound + uncertainty_level / GOLDEN_RATIO
 
         while uncertainty_level >= OPTIMISATION_ACURACY:
-            logger.info(f"starting optimisation round with uncertainty level: {uncertainty_level}")
+            logger.debug(f"starting optimisation round with uncertainty level: {uncertainty_level}")
             score_1 = self._score(x_1)
             score_2 = self._score(x_2)
 
@@ -149,6 +154,18 @@ class OptimisationEnginge:
 
         return (lower_bound + upper_bound) / 2
 
+def create_tilemap(conn: Connection, square_length, dataset):
+    if dataset not in ["sa1", "sa2", "sa3", "sa4"]:
+        raise ValueError(f"OptimisationEngine.__init__ invalid dataset: {dataset}")
+    with conn.cursor() as cur, open("./processing/tilemap_creation_template.sql") as file:
+        sql = file.read().replace(":dataset", dataset).replace(":square_length", str(square_length))
+        logger.debug(sql)
+        create_table, delete_existing_data, create_index, insert_data = sql.split(";", 3)
+        cur.execute(create_table)
+        cur.execute(delete_existing_data)
+        cur.execute(create_index)
+        cur.execute(insert_data)
+
 conninfo = (
     f"host={os.getenv('PGHOST', '192.168.0.141')} "
     f"port={os.getenv('PGPORT', '5432')} "
@@ -159,5 +176,11 @@ conninfo = (
 
 logger.info("Connecting to database")
 with psycopg.connect(conninfo) as conn:
-    optimiser = OptimisationEnginge(conn)
-    logger.info(f"final square length {optimiser.calculate_square_length()}")
+    square_lengths = dict()
+    for dataset in ["sa1", "sa2", "sa3", "sa4"]:
+        optimiser = OptimisationEnginge(conn, dataset)
+        square_lengths[dataset] = optimiser.calculate_square_length()
+        logger.info(f"final square length {square_lengths[dataset]}")
+        create_tilemap(conn, square_lengths[dataset], dataset)
+    print(square_lengths)
+    
