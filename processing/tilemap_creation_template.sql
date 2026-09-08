@@ -2,10 +2,28 @@ CREATE TABLE IF NOT EXISTS :dataset_2021_tilemap ( -- VAR dataset
     tile_id text PRIMARY KEY,
     tile_x integer NOT NULL,
     tile_y integer NOT NULL,
-    geom geometry(Polygon, 3577) NOT NULL
+    geom geometry(Polygon, 3577) NOT NULL,
+    centroid geometry(Point, 3577) NOT NULL
 );
 
-DELETE FROM :dataset_2021_tilemap;
+DELETE FROM :dataset_2021_tilemap; -- VAR dataset
+
+CREATE TABLE IF NOT EXISTS :dataset_2021_tilemap_polygons ( -- VAR dataset
+    tile_id text NOT NULL,
+    polygon_gid bigint NOT NULL,
+
+    PRIMARY KEY (tile_id, polygon_gid),
+
+    FOREIGN KEY (tile_id)
+        REFERENCES :dataset_2021_tilemap(tile_id) -- VAR dataset
+        ON DELETE CASCADE,
+
+    FOREIGN KEY (polygon_gid)
+        REFERENCES :dataset_2021(gid) -- VAR dataset
+        ON DELETE CASCADE
+);
+
+DELETE FROM :dataset_2021_tilemap_polygons; -- VAR dataset
 
 CREATE INDEX IF NOT EXISTS :dataset_2021_tilemap_geom_idx -- VAR dataset
 ON :dataset_2021_tilemap -- VAR dataset
@@ -13,7 +31,7 @@ USING GIST (geom);
 
 WITH
 params AS (
-    SELECT :square_length::double precision AS tile_size -- VAR precomputed optimal grid square length
+    SELECT :square_length::double precision AS tile_size -- VAR square_length (precomputed optimal grid square length)
 ),
 
 extent AS (
@@ -57,8 +75,10 @@ INSERT INTO :dataset_2021_tilemap ( -- VAR dataset
     tile_id,
     tile_x,
     tile_y,
-    geom
+    geom,
+    centroid
 )
+
 SELECT
     LPAD((x + 1)::text, 2, '0') ||
     LPAD((y + 1)::text, 2, '0') AS tile_id,
@@ -66,11 +86,31 @@ SELECT
     x + 1 AS tile_x,
     y + 1 AS tile_y,
 
-    ST_MakeEnvelope(
-        x1,
-        y1,
-        x2,
-        y2,
-        3577
-    ) AS geom
-FROM grid;
+    tile_geom AS geom,
+
+    ST_Centroid(tile_geom) AS centroid
+FROM (
+    SELECT
+        x,
+        y,
+        ST_MakeEnvelope(
+            x1,
+            y1,
+            x2,
+            y2,
+            3577
+        ) AS tile_geom
+    FROM grid
+) g;
+
+INSERT INTO :dataset_2021_tilemap_polygons ( -- VAR dataset
+    tile_id,
+    polygon_gid
+)
+SELECT
+    t.tile_id,
+    p.gid
+FROM :dataset_2021_tilemap AS t -- VAR dataset
+JOIN :dataset_2021 AS p -- VAR dataset
+    ON t.geom && p.centroid
+   AND ST_Covers(t.geom, p.centroid);

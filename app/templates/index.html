@@ -32,12 +32,21 @@
         import * as maplibregl from
             'https://unpkg.com/maplibre-gl@6.5.0/dist/maplibre-gl.mjs';
 
-        const map = new maplibregl.Map({
+        let statistical_area = {{area_level}};
+
+        let initial_center = [133.7751, -25.2744];
+        let initial_tile = await fetch(`/initial-tile?level=4&x=${initial_center[0]}&y=${initial_center[1]}`);
+        if (!initial_tile.ok) {
+            throw new Error(`HTTP error! Status: ${initial_tile.status}`);
+        }
+        initial_tile = await initial_tile.json();
+        console.log(initial_tile);
+
+        window.map = new maplibregl.Map({
             container: 'map',
             style: 'https://tiles.openfreemap.org/styles/bright',
 
-            // Australia
-            center: [133.7751, -25.2744],
+            center: initial_center,
             zoom: 4
         });
 
@@ -45,7 +54,7 @@
 
             map.addSource('australia', {
                 type: 'geojson',
-                data: "/get-tilemap?level={{area_level}}"
+                data: `/get-tile-geometries?level=${statistical_area}&tile-id=${initial_tile}`
             })
             map.addLayer({
                 id: 'australia',
@@ -57,8 +66,6 @@
                     'fill-opacity': 0.8
                 }
             });
-
-            // Optional: draw an outline around each polygon
             map.addLayer({
                 id: 'australia-outline',
                 type: 'line',
@@ -69,6 +76,62 @@
                     'line-width': 1
                 }
             });
+        });
+
+        map.on('zoom', async () => {
+            const old_level = statistical_area;
+            const current_zoom = map.getZoom();
+
+            if (current_zoom < 6.0) {
+                statistical_area = 4;
+            } else if (current_zoom < 8.0) {
+                statistical_area = 3;
+            } else if (current_zoom < 10.0) {
+                statistical_area = 2;
+            } else {
+                statistical_area = 1;
+            }
+
+            if (statistical_area !== old_level) {
+                console.log("changed statistical area");
+                
+                let centre = map.getCenter();
+                console.log(centre)
+                let tile = await fetch(`/initial-tile?level=${statistical_area}&x=${centre['lng']}&y=${centre['lat']}`);
+                if (!tile.ok) {
+                    throw new Error(`HTTP error! Status: ${tile.status}`);
+                }
+                tile = await tile.json();
+
+                map.removeLayer('australia');
+                map.removeLayer('australia-outline');
+                map.removeSource('australia');
+
+                map.addSource('australia', {
+                    type: 'geojson',
+                    data: `/get-tile-geometries?level=${statistical_area}&tile-id=${tile}`
+                });
+
+                map.addLayer({
+                    id: 'australia',
+                    type: 'fill',
+                    source: 'australia',
+                    paint: {
+                        'fill-color': '#088',
+                        'fill-opacity': 0.8
+                    }
+                });
+
+                map.addLayer({
+                    id: 'australia-outline',
+                    type: 'line',
+                    source: 'australia',
+                    paint: {
+                        'line-color': '#ffffff',
+                        'line-width': 1
+                    }
+                });
+            }
         });
     </script>
 </body>

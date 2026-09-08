@@ -11,7 +11,7 @@ load_dotenv()
 
 # Initial search interval, INITIAL_INTERVAL[1] must be > INITIAL_INTERVAL[0]
 OPTIMISATION_ACURACY = 5
-INITIAL_INTERVAL: tuple[float, float] = (290, 310)
+INITIAL_INTERVAL: tuple[float, float] = (190, 210)
 INITIAL_SQUARE_LENGTH = 50_000 # metres
 GOLDEN_RATIO = (1 + math.sqrt(5)) / 2
 
