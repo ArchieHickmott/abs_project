@@ -17,9 +17,8 @@ pkgs.mkShell {
     nlohmann_json
 
     # Frontend Stack (typescript)
-    nodejs
-    pnpm
-    typescript
+    nodejs_23
+    pnpm_10
 
     # Crow / Networking
     crow
