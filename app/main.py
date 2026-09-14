@@ -254,8 +254,8 @@ def get_tile():
         "features": features
     })
 
-@app.get("/initial-tile")
-def initial_tile():
+@app.get("/tile-id")
+def tile_id():
     level = int(request.args.get("level"))
     app.logger.debug(level)
     if not level in [1, 2, 3, 4]:
@@ -275,7 +275,7 @@ def initial_tile():
     sql = f"""
         SELECT tile_id
         FROM sa{level}_2021_tilemap
-        WHERE ST_Contains(geom, ST_Transform(ST_Point({position[0]}, {position[1]}, 4326), 3577))
+        WHERE ST_Covers(geom, ST_Transform(ST_Point({position[0]}, {position[1]}, 4326), 3577))
     """
 
     with psycopg.connect(conninfo) as conn:
@@ -283,6 +283,9 @@ def initial_tile():
             cur.execute(sql)
             rows = cur.fetchall()
             app.logger.info(rows)
+            
+    if not rows:
+        return jsonify(None)
     
     return jsonify(rows[0][0])
 

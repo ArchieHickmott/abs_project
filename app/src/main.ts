@@ -7,37 +7,71 @@ maplibregl.setWorkerUrl(workerUrl);
 
 type StatisticalAreaLevel = 1 | 2 | 3 | 4;
 
+class TileCoordinate {
+  x: number;
+  y: number;
+
+  constructor(x: number, y: number);
+  constructor(id: string);
+
+  constructor(x: number | string, y?: number) {
+    if (typeof x === "number") {
+      this.x = x;
+      if (y === undefined) {
+        throw new Error("Argument error, expected both an x and y coordinate to contruct TileCoordinate")
+      }
+      this.y = y;
+    }
+    else {
+      let coordinates: number[] = x.split("_").map(Number);
+      let coordinates_count = coordinates.length
+      if (coordinates_count != 2) {
+        throw new Error(`Argument error, tile id formated incorrectly ${x}`)
+      }
+      this.x = coordinates[0];
+      this.y = coordinates[1];
+    }
+  };
+
+  to_string_id(): string {
+    return `${this.x}_${this.y}`
+  }
+}
+
 const initialCenter: [number, number] = [133.7751, -25.2744];
 
 let statisticalArea: StatisticalAreaLevel = 4;
 
-async function getInitialTile(
+async function getTileId(
     level: StatisticalAreaLevel,
     longitude: number,
     latitude: number,
-): Promise<string> {
+): Promise<TileCoordinate | null> {
     const response = await fetch(
-        `/initial-tile?level=${level}&x=${longitude}&y=${latitude}`,
+        `/tile-id?level=${level}&x=${longitude}&y=${latitude}`,
     );
 
     if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        throw new Error(`HTTP error: ${response.status}`);
     }
 
-    return response.json();
+    const json: string | null = await response.json();
+    if (json === null) {
+        return null;
+    }
+
+    return new TileCoordinate(json);
 }
 
-async function loadTile(
+function loadTile(
     map: maplibregl.Map,
     level: StatisticalAreaLevel,
-    longitude: number,
-    latitude: number,
-): Promise<void> {
-    const tile = await getInitialTile(level, longitude, latitude);
+    tile_coordinate: TileCoordinate
+): void {
+    const tile = tile_coordinate.to_string_id();
 
     const sourceData = `/get-tile-geometries?level=${level}&tile-id=${tile}`;
 
-    // Remove the old source/layers if they exist.
     if (map.getLayer("australia")) {
         map.removeLayer("australia");
     }
@@ -97,11 +131,14 @@ async function main(): Promise<void> {
     });
 
     map.on("load", async () => {
-        await loadTile(
+        const tile: TileCoordinate | null = await getTileId(statisticalArea, initialCenter[0], initialCenter[1])
+        if (tile === null) {
+          return;
+        }
+        loadTile(
             map,
             statisticalArea,
-            initialCenter[0],
-            initialCenter[1],
+            tile
         );
     });
 
@@ -121,11 +158,14 @@ async function main(): Promise<void> {
 
         const center = map.getCenter();
 
-        await loadTile(
+        const tile: TileCoordinate | null = await getTileId(statisticalArea, center.lng, center.lat)
+        if (tile === null) {
+          return;
+        }
+        loadTile(
             map,
             statisticalArea,
-            center.lng,
-            center.lat,
+            tile
         );
     });
 }
