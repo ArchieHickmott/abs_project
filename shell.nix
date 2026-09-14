@@ -16,6 +16,11 @@ pkgs.mkShell {
     boost
     nlohmann_json
 
+    # Frontend Stack (typescript)
+    nodejs
+    pnpm
+    typescript
+
     # Crow / Networking
     crow
     asio
@@ -49,11 +54,23 @@ shellHook = ''
 
     source .venv/bin/activate
 
+    if [ ! -d node_modules ]; then
+      pnpm install
+    fi
+
     echo ""
     echo "Python:"
     python --version
     echo "Python executable:"
     which python
+
+    echo ""
+    echo "Node:"
+    node --version
+
+    echo ""
+    echo "pnpm"
+    pnpm --version
 
     echo ""
     echo "C++:"
