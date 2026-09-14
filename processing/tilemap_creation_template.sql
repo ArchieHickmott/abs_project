@@ -6,8 +6,6 @@ CREATE TABLE IF NOT EXISTS :dataset_2021_tilemap ( -- VAR dataset
     centroid geometry(Point, 3577) NOT NULL
 );
 
-DELETE FROM :dataset_2021_tilemap; -- VAR dataset
-
 CREATE TABLE IF NOT EXISTS :dataset_2021_tilemap_polygons ( -- VAR dataset
     tile_id text NOT NULL,
     polygon_gid bigint NOT NULL,
@@ -24,6 +22,7 @@ CREATE TABLE IF NOT EXISTS :dataset_2021_tilemap_polygons ( -- VAR dataset
 );
 
 DELETE FROM :dataset_2021_tilemap_polygons; -- VAR dataset
+DELETE FROM :dataset_2021_tilemap; -- VAR dataset
 
 CREATE INDEX IF NOT EXISTS :dataset_2021_tilemap_geom_idx -- VAR dataset
 ON :dataset_2021_tilemap -- VAR dataset
@@ -80,8 +79,7 @@ INSERT INTO :dataset_2021_tilemap ( -- VAR dataset
 )
 
 SELECT
-    LPAD((x + 1)::text, 2, '0') ||
-    LPAD((y + 1)::text, 2, '0') AS tile_id,
+    (x + 1)::text || '_' || (y + 1)::text AS tile_id,
 
     x + 1 AS tile_x,
     y + 1 AS tile_y,

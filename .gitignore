@@ -8,3 +8,4 @@ data/*
 *.jsonl
 *.env
 .vscode/*
+node_modules/*

@@ -11,7 +11,7 @@ load_dotenv()
 
 # Initial search interval, INITIAL_INTERVAL[1] must be > INITIAL_INTERVAL[0]
 OPTIMISATION_ACURACY = 5
-INITIAL_INTERVAL: tuple[float, float] = (190, 210)
+INITIAL_INTERVAL = {"sa4":(290, 310),"sa3":(150,190),"sa2":(120,150),"sa1":(90,120)}
 INITIAL_SQUARE_LENGTH = 50_000 # metres
 GOLDEN_RATIO = (1 + math.sqrt(5)) / 2
 
@@ -128,7 +128,7 @@ class OptimisationEnginge:
         logger.info(f"starting optimisation process for dataset: {self.dataset}")
         logger.debug(self._mean(INITIAL_SQUARE_LENGTH))
         bounds = [INITIAL_SQUARE_LENGTH * math.sqrt(goal / self._mean(INITIAL_SQUARE_LENGTH)) 
-                                                            for goal in INITIAL_INTERVAL]
+                                                            for goal in INITIAL_INTERVAL[self.dataset]]
 
         lower_bound, upper_bound = bounds
         uncertainty_level: float = upper_bound - lower_bound

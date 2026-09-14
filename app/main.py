@@ -6,6 +6,10 @@ import sys
 
 app = Flask(__name__)
 
+@app.route("/typescript-test")
+def typescript_test():
+    return render_template("typescript_test.html")
+
 @app.route("/")
 def index():
     level = int(request.args.get("level", default=4))
