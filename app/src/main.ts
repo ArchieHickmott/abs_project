@@ -71,7 +71,7 @@ class Tile {
     }
 }
 const initialCenter: [number, number] = [133.7751, -25.2744];
-const tileRenderRadius: number = 3;
+const tileRenderRadius= {1:1, 2:2, 3:3, 4:4};
 
 let statisticalArea: StatisticalAreaLevel = 4;
 let tileCache: Set<string> = new Set();
@@ -173,18 +173,19 @@ function unloadTile(
     tileCache.delete(tile.source_name);
 }
 
-function getTileCacheList(initial_tile: TileCoordinate): TileCoordinate[] {
+function getTileCacheList(initial_tile: TileCoordinate, level: StatisticalAreaLevel): TileCoordinate[] {
+    const radius = tileRenderRadius[level];
     const tiles: { tile: TileCoordinate; distance: number }[] = [];
-    const radius_squared = tileRenderRadius * tileRenderRadius;
+    const radius_squared = radius * radius;
 
     for (
-        let x = initial_tile.x - tileRenderRadius;
-        x <= initial_tile.x + tileRenderRadius;
+        let x = initial_tile.x - radius;
+        x <= initial_tile.x + radius;
         x++
     ) {
         for (
-            let y = initial_tile.y - tileRenderRadius;
-            y <= initial_tile.y + tileRenderRadius;
+            let y = initial_tile.y - radius;
+            y <= initial_tile.y + radius;
             y++
         ) {
             const dx = x - initial_tile.x;
@@ -210,7 +211,7 @@ function getStatisticalAreaLevel(zoom: number): StatisticalAreaLevel {
         return 4;
     } else if (zoom < 8.0) {
         return 3;
-    } else if (zoom < 10.0) {
+    } else if (zoom < 11.0) {
         return 2;
     } else {
         return 1;
@@ -232,7 +233,7 @@ async function newTileCache(
     if (center_tile === null) {
         return;
     }
-    let tile_cache: TileCoordinate[] = getTileCacheList(center_tile);
+    let tile_cache: TileCoordinate[] = getTileCacheList(center_tile, level);
     console.log(`${tile_cache.map(tile => tile.toStringId())}`)
     for (const tile of tile_cache) {
         loadTile(
@@ -240,6 +241,19 @@ async function newTileCache(
             new Tile(tile, level)
         )
     }
+}
+
+async function moveTileCache(
+    map: maplibregl.Map,
+    level: StatisticalAreaLevel,
+    longitude: number,
+    latitude: number    
+): Promise<void> {
+    const center_tile: TileCoordinate | null = await getTileId(statisticalArea, longitude, latitude)
+    if (center_tile === null) {
+        return;
+    }
+    const new_tile_cache = getTileCacheList(center_tile, level);
 }
 
 async function main(): Promise<void> {

@@ -21,6 +21,8 @@ def index():
 
 @app.get("/get-tile-geometries")
 def get_tile_geometries():
+    simplification_level = {4:"0.03",3:"0.004",2:"0.0008",1:"0.00015"}
+
     level = int(request.args.get("level", default=4))
 
     if level not in [1, 2, 3, 4]:
@@ -41,7 +43,7 @@ def get_tile_geometries():
             p.gid,
             p.sa{level}_code21,
             ST_AsGeoJSON(
-                ST_Transform(p.geom, 4326)
+                ST_SimplifyPreserveTopology(ST_Transform(p.geom, 4326), {simplification_level[level]})
             )::json AS geometry
         FROM sa{level}_2021_tilemap_polygons tp
         JOIN sa{level}_2021 p
