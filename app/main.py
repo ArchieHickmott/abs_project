@@ -245,8 +245,10 @@ def get_tile():
     for tile_id, geometry in rows:
         features.append({
             "type": "Feature",
-            "id": tile_id,
-            "geometry": geometry
+            "geometry": geometry,
+            "properties": {
+                "tile_id": tile_id
+            }
         })
 
     return jsonify({
