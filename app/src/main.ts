@@ -173,7 +173,7 @@ function unloadTile(
     tileCache.delete(tile.source_name);
 }
 
-function getTileCacheList(initial_tile: TileCoordinate, level: StatisticalAreaLevel): TileCoordinate[] {
+function getTileCacheList(initial_tile: TileCoordinate, level: StatisticalAreaLevel): Tile[] {
     const radius = tileRenderRadius[level];
     const tiles: { tile: TileCoordinate; distance: number }[] = [];
     const radius_squared = radius * radius;
@@ -203,7 +203,7 @@ function getTileCacheList(initial_tile: TileCoordinate, level: StatisticalAreaLe
 
     tiles.sort((a, b) => a.distance - b.distance);
 
-    return tiles.map(x => x.tile);
+    return tiles.map(x => new Tile(x.tile, level));
 }
 
 function getStatisticalAreaLevel(zoom: number): StatisticalAreaLevel {
@@ -233,12 +233,12 @@ async function newTileCache(
     if (center_tile === null) {
         return;
     }
-    let tile_cache: TileCoordinate[] = getTileCacheList(center_tile, level);
-    console.log(`${tile_cache.map(tile => tile.toStringId())}`)
+    let tile_cache = getTileCacheList(center_tile, level);
+    console.log(`${tile_cache.map(tile => tile.id)}`)
     for (const tile of tile_cache) {
         loadTile(
             map,
-            new Tile(tile, level)
+            tile
         )
     }
 }
@@ -253,7 +253,16 @@ async function moveTileCache(
     if (center_tile === null) {
         return;
     }
-    const new_tile_cache = getTileCacheList(center_tile, level);
+
+    const new_tile_cache = new Set(
+        getTileCacheList(center_tile, level).map(tile => tile.source_name)
+    );
+    const tiles_to_unload = new Set(
+        [...new_tile_cache].filter(tile => !tileCache.has(tile))
+    );;
+    const tiles_to_load = new Set(
+        [...tileCache].filter(tile => !new_tile_cache.has(tile))
+    );
 }
 
 async function main(): Promise<void> {
