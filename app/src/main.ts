@@ -71,10 +71,15 @@ class Tile {
     }
 }
 const initialCenter: [number, number] = [133.7751, -25.2744];
-const tileRenderRadius= {1:1, 2:2, 3:3, 4:4};
+const tileRenderRadius= {1:2, 2:2, 3:5, 4:10};
+const cacheMoveThreshold = {1:0.5, 2:1, 3:2, 4:4};
+
 
 let statisticalArea: StatisticalAreaLevel = 4;
 let tileCache: Set<string> = new Set();
+let lastCacheLongitude = initialCenter[0];
+let lastCacheLatitude = initialCenter[1];
+let zooming = false; // tells map.on("moveend") that moveTileCache doesnt need to be called as the tiles have been reloaded
 
 async function getTileId(
     level: StatisticalAreaLevel,
@@ -183,16 +188,23 @@ function getTileCacheList(initial_tile: TileCoordinate, level: StatisticalAreaLe
         x <= initial_tile.x + radius;
         x++
     ) {
+        if (x < 0) {
+            continue;
+        }
         for (
             let y = initial_tile.y - radius;
             y <= initial_tile.y + radius;
             y++
         ) {
+            if (y < 0) {
+                continue;
+            }
             const dx = x - initial_tile.x;
             const dy = y - initial_tile.y;
             const distance = dx * dx + dy * dy;
 
             if (distance <= radius_squared) {
+
                 tiles.push({
                     tile: new TileCoordinate(x, y),
                     distance,
@@ -249,7 +261,12 @@ async function moveTileCache(
     longitude: number,
     latitude: number    
 ): Promise<void> {
-    const center_tile: TileCoordinate | null = await getTileId(statisticalArea, longitude, latitude)
+    if (level === 4) {
+        return;
+    }
+
+    const center_tile: TileCoordinate | null = await getTileId(level, longitude, latitude)
+
     if (center_tile === null) {
         return;
     }
@@ -257,12 +274,17 @@ async function moveTileCache(
     const new_tile_cache = new Set(
         getTileCacheList(center_tile, level).map(tile => tile.source_name)
     );
-    const tiles_to_unload = new Set(
+    console.log(" ");
+    console.log(new_tile_cache == tileCache);
+    const tiles_to_load = new Set(
         [...new_tile_cache].filter(tile => !tileCache.has(tile))
     );;
-    const tiles_to_load = new Set(
+    const tiles_to_unload = new Set(
         [...tileCache].filter(tile => !new_tile_cache.has(tile))
     );
+
+    tiles_to_unload.forEach((tile) => unloadTile(map, Tile.fromSourceName(tile)))
+    tiles_to_load.forEach((tile) => loadTile(map, Tile.fromSourceName(tile)))
 }
 
 async function main(): Promise<void> {
@@ -276,8 +298,10 @@ async function main(): Promise<void> {
     map.on("load", async () => {return await newTileCache(map, statisticalArea, initialCenter[0], initialCenter[1]);});
 
     map.on("zoom", async () => {
+        // zooming = true;
+
         const oldLevel = statisticalArea;
-        const newLevel = getStatisticalAreaLevel(map.getZoom());
+        const newLevel = getStatisticalAreaLevel(map.getZoom()); 
 
         if (newLevel === oldLevel) {
             return;
@@ -285,13 +309,44 @@ async function main(): Promise<void> {
 
         statisticalArea = newLevel;
 
-        console.log(
-            `Changed statistical area: ${oldLevel} -> ${statisticalArea}`,
-        );
-
         const center = map.getCenter();
 
+        console.log(`[${center.lng}, ${center.lat}]`)
+
         await newTileCache(map, statisticalArea, center.lng, center.lat);
+        zooming = false;
+    });
+
+    map.on("moveend", async () => {
+        if (zooming) {
+            return;
+        }
+        const center = map.getCenter();
+
+        const longitudeDifference = Math.abs(
+            center.lng - lastCacheLongitude
+        );
+    
+        const latitudeDifference = Math.abs(
+            center.lat - lastCacheLatitude
+        );
+    
+        if (
+            longitudeDifference < cacheMoveThreshold[statisticalArea] &&
+            latitudeDifference < cacheMoveThreshold[statisticalArea]
+        ) {
+            return;
+        }
+    
+        lastCacheLongitude = center.lng;
+        lastCacheLatitude = center.lat;
+    
+        await moveTileCache(
+            map,
+            statisticalArea,
+            center.lng,
+            center.lat,
+        );
     });
 }
 
