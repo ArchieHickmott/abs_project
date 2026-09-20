@@ -7,348 +7,261 @@ maplibregl.setWorkerUrl(workerUrl);
 
 type StatisticalAreaLevel = 1 | 2 | 3 | 4;
 
-class TileCoordinate {
-    x: number;
-    y: number;
-
-    constructor(x: number, y: number) {
-        this.x = x;
-        this.y = y;
-    }
-
-    static fromTileId(tile_id: string) {
-        let coordinates: number[] = tile_id.split("_").map(Number);
-        let coordinates_count = coordinates.length;
-        if (coordinates_count != 2) {
-            throw new Error(`Argument error, tile id formated incorrectly ${tile_id}`);
-        }
-        return new TileCoordinate(coordinates[0], coordinates[1]);
-    }
-
-    toStringId(): string {
-        return `${this.x}_${this.y}`
-    }
+interface Sa1Properties {
+    sa1_code: number;
 }
 
-class Tile {
-    id: string;
-    coordinate: TileCoordinate;
-    statistical_area: StatisticalAreaLevel;
-
-    source_name: string;
-    layer_name: string; 
-    outline_name: string;
-    label_name: string;
-
-    constructor(coordinate: TileCoordinate, statistical_area: StatisticalAreaLevel) {
-        this.id = coordinate.toStringId();
-        this.coordinate = coordinate;
-        this.statistical_area = statistical_area;
-        this.source_name = `SA${statistical_area}_${coordinate.toStringId()}`;
-        this.layer_name = this.source_name + "-background";
-        this.outline_name = this.source_name + "-outline";
-        this.label_name = this.source_name + "-label"    
-    }
-
-    static fromSourceName(source_name: string): Tile {
-        const match = source_name.match(/^SA(\d+)_(.+)$/);
-
-        if (!match) {
-            throw new Error(
-                `Argument error, source name formatted incorrectly: ${source_name}`
-            );
-        }
-
-        const level = Number(match[1]);
-        const tile_id = match[2];
-
-        const coordinate = TileCoordinate.fromTileId(tile_id);
-
-        return new Tile(
-            coordinate,
-            level as StatisticalAreaLevel
-        );
-    }
+interface Sa2Properties {
+    sa2_code: number;
 }
-const initialCenter: [number, number] = [133.7751, -25.2744];
-const tileRenderRadius= {1:2, 2:2, 3:5, 4:10};
-const cacheMoveThreshold = {1:0.5, 2:1, 3:2, 4:4};
 
+interface Sa3Properties {
+    sa3_code: number;
+}
+
+interface Sa4Properties {
+    sa4_code: number;
+}
+
+type StatisticalAreaProperties =
+    | Sa1Properties
+    | Sa2Properties
+    | Sa3Properties
+    | Sa4Properties;
+
+type PropertiesForLevel<L extends StatisticalAreaLevel> =
+    L extends 1 ? Sa1Properties :
+    L extends 2 ? Sa2Properties :
+    L extends 3 ? Sa3Properties :
+    Sa4Properties;
+
+interface MultiPolygon {
+    type: "MultiPolygon";
+    coordinates: number[][][][];
+}
+
+interface Feature<
+    P extends StatisticalAreaProperties = StatisticalAreaProperties
+> {
+    type: "Feature";
+    id: number;
+    properties: P;
+    geometry: MultiPolygon;
+}
+
+interface FeatureCollection<
+    P extends StatisticalAreaProperties = StatisticalAreaProperties
+> {
+    type: "FeatureCollection";
+    features: Feature<P>[];
+}
+
+const INITIAL_CENTRE: [number, number] = [133.7751, -25.2744];
+const CACHE_MOVE_THRESHOLD = {1:0.5, 2:1, 3:2, 4:4};
+const POLYGON_SOURCE = "statistical-areas";
+const POLYGON_FILL_LAYER = "statistical-areas-fill";
+const POLYGON_OUTLINE_LAYER = "statistical-areas-outline";
 
 let statisticalArea: StatisticalAreaLevel = 4;
-let tileCache: Set<string> = new Set();
-let lastCacheLongitude = initialCenter[0];
-let lastCacheLatitude = initialCenter[1];
-let zooming = false; // tells map.on("moveend") that moveTileCache doesnt need to be called as the tiles have been reloaded
+let lastCacheLongitude = INITIAL_CENTRE[0];
+let lastCacheLatitude = INITIAL_CENTRE[1];
+let zooming = false;
 
-async function getTileId(
-    level: StatisticalAreaLevel,
+function getStatisticalAreaLevel(
+    zoom: number
+): StatisticalAreaLevel {
+
+    if (zoom < 6.0) {
+        return 4;
+    }
+
+    if (zoom < 8.0) {
+        return 3;
+    }
+
+    if (zoom < 11.0) {
+        return 2;
+    }
+
+    return 1;
+}
+
+async function getTilemapCache<L extends StatisticalAreaLevel>(
+    level: L,
     longitude: number,
     latitude: number,
-): Promise<TileCoordinate | null> {
+): Promise<FeatureCollection<PropertiesForLevel<L>>> {
+
     const response = await fetch(
-        `/tile-id?level=${level}&x=${longitude}&y=${latitude}`,
+        `/tilemap-cache?x=${longitude}&y=${latitude}&level=${level}`
     );
 
     if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`);
     }
 
-    const json: string | null = await response.json();
-    if (json === null) {
-        return null;
-    }
-
-    return TileCoordinate.fromTileId(json);
+    return await response.json() as FeatureCollection<
+        PropertiesForLevel<L>
+    >;
 }
 
-function loadTile(
+function setPolygonData(
     map: maplibregl.Map,
-    tile: Tile
+    data: FeatureCollection,
 ): void {
-    if (tileCache.has(tile.source_name)) {
-        return;
-    }
-    const source_data = `/get-tile-geometries?level=${tile.statistical_area}&tile-id=${tile.id}`;
+    const source = map.getSource(
+        POLYGON_SOURCE
+    ) as maplibregl.GeoJSONSource | undefined;
 
-    console.log(`loading_tile: ${tile.id}`)
-
-    unloadTile(map, tile);
-
-    map.addSource(tile.source_name, {
-        type: "geojson",
-        data: source_data,
-    });
-
-    map.addLayer({
-        id: tile.layer_name,
-        type: "fill",
-        source: tile.source_name,
-        paint: {
-            "fill-color": "#088",
-            "fill-opacity": 0.8,
-        },
-    });
-
-    map.addLayer({
-        id: tile.outline_name,
-        type: "line",
-        source: tile.source_name,
-        paint: {
-            "line-color": "#ffffff",
-            "line-width": 1,
-        },
-    });
-
-    map.addLayer({
-        id: tile.label_name,
-        type: "symbol",
-        source: tile.source_name,
-        layout: {
-            "text-field": ["get", "tile_id"],
-            "text-size": 16,
-            "text-allow-overlap": true,
-        },
-        paint: {
-            "text-color": "#ffffff",
-            "text-halo-color": "#000000",
-            "text-halo-width": 2,
-        },
-    });
-
-    tileCache.add(tile.source_name);
-}
-
-function unloadTile(
-    map: maplibregl.Map,
-    tile: Tile
-): void {
-    if (map.getLayer(tile.layer_name)) {
-        map.removeLayer(tile.layer_name);
+    if (!source) {
+        throw new Error(
+            `MapLibre source '${POLYGON_SOURCE}' does not exist`
+        );
     }
 
-    if (map.getLayer(tile.outline_name)) {
-        map.removeLayer(tile.outline_name);
-    }
-
-    if (map.getLayer(tile.label_name)) {
-        map.removeLayer(tile.label_name);
-    }
-
-    if (map.getSource(tile.source_name)) {
-        map.removeSource(tile.source_name);
-    }
-    tileCache.delete(tile.source_name);
-}
-
-function getTileCacheList(initial_tile: TileCoordinate, level: StatisticalAreaLevel): Tile[] {
-    const radius = tileRenderRadius[level];
-    const tiles: { tile: TileCoordinate; distance: number }[] = [];
-    const radius_squared = radius * radius;
-
-    for (
-        let x = initial_tile.x - radius;
-        x <= initial_tile.x + radius;
-        x++
-    ) {
-        if (x < 0) {
-            continue;
-        }
-        for (
-            let y = initial_tile.y - radius;
-            y <= initial_tile.y + radius;
-            y++
-        ) {
-            if (y < 0) {
-                continue;
-            }
-            const dx = x - initial_tile.x;
-            const dy = y - initial_tile.y;
-            const distance = dx * dx + dy * dy;
-
-            if (distance <= radius_squared) {
-
-                tiles.push({
-                    tile: new TileCoordinate(x, y),
-                    distance,
-                });
-            }
-        }
-    }
-
-    tiles.sort((a, b) => a.distance - b.distance);
-
-    return tiles.map(x => new Tile(x.tile, level));
-}
-
-function getStatisticalAreaLevel(zoom: number): StatisticalAreaLevel {
-    if (zoom < 6.0) {
-        return 4;
-    } else if (zoom < 8.0) {
-        return 3;
-    } else if (zoom < 11.0) {
-        return 2;
-    } else {
-        return 1;
-    }
-}
-
-function clearTileCache(map: maplibregl.Map) {
-    tileCache.forEach(tile => unloadTile(map, Tile.fromSourceName(tile)))
+    source.setData(data);
 }
 
 async function newTileCache(
     map: maplibregl.Map,
     level: StatisticalAreaLevel,
     longitude: number,
-    latitude: number
+    latitude: number,
 ): Promise<void> {
-    clearTileCache(map);
-    const center_tile: TileCoordinate | null = await getTileId(statisticalArea, longitude, latitude)
-    if (center_tile === null) {
-        return;
-    }
-    let tile_cache = getTileCacheList(center_tile, level);
-    console.log(`${tile_cache.map(tile => tile.id)}`)
-    for (const tile of tile_cache) {
-        loadTile(
-            map,
-            tile
-        )
-    }
+
+    console.log(
+        `Loading SA${level} cache at ${longitude}, ${latitude}`
+    );
+
+    const data = await getTilemapCache(
+        level,
+        longitude,
+        latitude,
+    );
+
+    console.log(
+        `Received ${data.features.length} unique polygons`
+    );
+
+    setPolygonData(map, data);
+
+    lastCacheLongitude = longitude;
+    lastCacheLatitude = latitude;
 }
 
 async function moveTileCache(
     map: maplibregl.Map,
     level: StatisticalAreaLevel,
     longitude: number,
-    latitude: number    
+    latitude: number,
 ): Promise<void> {
-    if (level === 4) {
+
+    const longitudeDifference = Math.abs(
+        longitude - lastCacheLongitude
+    );
+
+    const latitudeDifference = Math.abs(
+        latitude - lastCacheLatitude
+    );
+
+    if (
+        longitudeDifference < CACHE_MOVE_THRESHOLD[level] &&
+        latitudeDifference < CACHE_MOVE_THRESHOLD[level]
+    ) {
         return;
     }
 
-    const center_tile: TileCoordinate | null = await getTileId(level, longitude, latitude)
-
-    if (center_tile === null) {
-        return;
-    }
-
-    const new_tile_cache = new Set(
-        getTileCacheList(center_tile, level).map(tile => tile.source_name)
+    await newTileCache(
+        map,
+        level,
+        longitude,
+        latitude,
     );
-    console.log(" ");
-    console.log(new_tile_cache == tileCache);
-    const tiles_to_load = new Set(
-        [...new_tile_cache].filter(tile => !tileCache.has(tile))
-    );;
-    const tiles_to_unload = new Set(
-        [...tileCache].filter(tile => !new_tile_cache.has(tile))
-    );
-
-    tiles_to_unload.forEach((tile) => unloadTile(map, Tile.fromSourceName(tile)))
-    tiles_to_load.forEach((tile) => loadTile(map, Tile.fromSourceName(tile)))
 }
 
 async function main(): Promise<void> {
     const map = new maplibregl.Map({
         container: "map",
         style: "https://tiles.openfreemap.org/styles/bright",
-        center: initialCenter,
+        center: INITIAL_CENTRE,
         zoom: 4,
     });
 
-    map.on("load", async () => {return await newTileCache(map, statisticalArea, initialCenter[0], initialCenter[1]);});
+    map.on("load", async () => {
+        map.addSource(POLYGON_SOURCE, {
+            type: "geojson",
+            data: {
+                type: "FeatureCollection",
+                features: [],
+            },
+        });
 
-    map.on("zoom", async () => {
-        // zooming = true;
+        map.addLayer({
+            id: POLYGON_FILL_LAYER,
+            type: "fill",
+            source: POLYGON_SOURCE,
+            paint: {
+                "fill-color": "#088",
+                "fill-opacity": 0.8,
+            },
+        });
 
+        map.addLayer({
+            id: POLYGON_OUTLINE_LAYER,
+            type: "line",
+            source: POLYGON_SOURCE,
+            paint: {
+                "line-color": "#ffffff",
+                "line-width": 1,
+            },
+        });
+
+        await newTileCache(
+            map,
+            statisticalArea,
+            INITIAL_CENTRE[0],
+            INITIAL_CENTRE[1],
+        );
+    });
+
+    map.on("zoomend", async () => {
         const oldLevel = statisticalArea;
-        const newLevel = getStatisticalAreaLevel(map.getZoom()); 
-
+        const newLevel = getStatisticalAreaLevel(
+            map.getZoom()
+        );
         if (newLevel === oldLevel) {
             return;
         }
 
         statisticalArea = newLevel;
+        const centre = map.getCenter();
 
-        const center = map.getCenter();
+        zooming = true;
 
-        console.log(`[${center.lng}, ${center.lat}]`)
-
-        await newTileCache(map, statisticalArea, center.lng, center.lat);
-        zooming = false;
+        try {
+            await newTileCache(
+                map,
+                statisticalArea,
+                centre.lng,
+                centre.lat,
+            );
+        } finally {
+            zooming = false;
+        }
     });
 
     map.on("moveend", async () => {
         if (zooming) {
             return;
         }
-        const center = map.getCenter();
 
-        const longitudeDifference = Math.abs(
-            center.lng - lastCacheLongitude
-        );
-    
-        const latitudeDifference = Math.abs(
-            center.lat - lastCacheLatitude
-        );
-    
-        if (
-            longitudeDifference < cacheMoveThreshold[statisticalArea] &&
-            latitudeDifference < cacheMoveThreshold[statisticalArea]
-        ) {
-            return;
-        }
-    
-        lastCacheLongitude = center.lng;
-        lastCacheLatitude = center.lat;
-    
+        const centre = map.getCenter();
+
         await moveTileCache(
             map,
             statisticalArea,
-            center.lng,
-            center.lat,
+            centre.lng,
+            centre.lat,
         );
     });
 }
