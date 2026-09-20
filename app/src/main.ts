@@ -106,6 +106,9 @@ function loadTile(
     map: maplibregl.Map,
     tile: Tile
 ): void {
+    if (tileCache.has(tile.source_name)) {
+        return;
+    }
     const source_data = `/get-tile-geometries?level=${tile.statistical_area}&tile-id=${tile.id}`;
 
     console.log(`loading_tile: ${tile.id}`)
