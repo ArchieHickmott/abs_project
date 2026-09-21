@@ -57,15 +57,14 @@ interface FeatureCollection<
 }
 
 const INITIAL_CENTRE: [number, number] = [133.7751, -25.2744];
-const CACHE_MOVE_THRESHOLD = {1:0.5, 2:1, 3:2, 4:4};
+const CACHE_MOVE_THRESHOLDS: Record<StatisticalAreaLevel, number> = {1:0.5, 2:1, 3:2, 4:4};
 const POLYGON_SOURCE = "statistical-areas";
 const POLYGON_FILL_LAYER = "statistical-areas-fill";
 const POLYGON_OUTLINE_LAYER = "statistical-areas-outline";
 
-let statisticalArea: StatisticalAreaLevel = 4;
-let lastCacheLongitude = INITIAL_CENTRE[0];
-let lastCacheLatitude = INITIAL_CENTRE[1];
-let zooming = false;
+let statisticalAreaLevel: StatisticalAreaLevel = 4;
+let lastCacheCentre: [number, number] = INITIAL_CENTRE
+let zoomingCacheUpdatePending = false;
 
 function getStatisticalAreaLevel(
     zoom: number
@@ -122,7 +121,7 @@ function setPolygonData(
     source.setData(data);
 }
 
-async function newTileCache(
+async function loadTileCache(
     map: maplibregl.Map,
     level: StatisticalAreaLevel,
     longitude: number,
@@ -145,11 +144,11 @@ async function newTileCache(
 
     setPolygonData(map, data);
 
-    lastCacheLongitude = longitude;
-    lastCacheLatitude = latitude;
+    lastCacheCentre[0] = longitude;
+    lastCacheCentre[1] = latitude;
 }
 
-async function moveTileCache(
+async function updateTileCache(
     map: maplibregl.Map,
     level: StatisticalAreaLevel,
     longitude: number,
@@ -157,21 +156,21 @@ async function moveTileCache(
 ): Promise<void> {
 
     const longitudeDifference = Math.abs(
-        longitude - lastCacheLongitude
+        longitude - lastCacheCentre[0]
     );
 
     const latitudeDifference = Math.abs(
-        latitude - lastCacheLatitude
+        latitude - lastCacheCentre[1]
     );
 
     if (
-        longitudeDifference < CACHE_MOVE_THRESHOLD[level] &&
-        latitudeDifference < CACHE_MOVE_THRESHOLD[level]
+        longitudeDifference < CACHE_MOVE_THRESHOLDS[level] &&
+        latitudeDifference < CACHE_MOVE_THRESHOLDS[level]
     ) {
         return;
     }
 
-    await newTileCache(
+    await loadTileCache(
         map,
         level,
         longitude,
@@ -216,16 +215,16 @@ async function main(): Promise<void> {
             },
         });
 
-        await newTileCache(
+        await loadTileCache(
             map,
-            statisticalArea,
+            statisticalAreaLevel,
             INITIAL_CENTRE[0],
             INITIAL_CENTRE[1],
         );
     });
 
     map.on("zoomend", async () => {
-        const oldLevel = statisticalArea;
+        const oldLevel = statisticalAreaLevel;
         const newLevel = getStatisticalAreaLevel(
             map.getZoom()
         );
@@ -233,33 +232,33 @@ async function main(): Promise<void> {
             return;
         }
 
-        statisticalArea = newLevel;
+        statisticalAreaLevel = newLevel;
         const centre = map.getCenter();
 
-        zooming = true;
+        zoomingCacheUpdatePending = true;
 
         try {
-            await newTileCache(
+            await loadTileCache(
                 map,
-                statisticalArea,
+                statisticalAreaLevel,
                 centre.lng,
                 centre.lat,
             );
         } finally {
-            zooming = false;
+            zoomingCacheUpdatePending = false;
         }
     });
 
     map.on("moveend", async () => {
-        if (zooming) {
+        if (zoomingCacheUpdatePending) {
             return;
         }
 
         const centre = map.getCenter();
 
-        await moveTileCache(
+        await updateTileCache(
             map,
-            statisticalArea,
+            statisticalAreaLevel,
             centre.lng,
             centre.lat,
         );
