@@ -5,177 +5,53 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 
 maplibregl.setWorkerUrl(workerUrl);
 
-type StatisticalAreaLevel = 1 | 2 | 3 | 4;
+import {
+    POLYGON_SOURCE,
+    INITIAL_CENTRE,
+    StatisticalAreaLevel,
+    loadTileCache,
+    getStatisticalAreaLevel,
+    updateTileCache,
+} from "./geometry_loading";
 
-interface Sa1Properties {
-    sa1_code: number;
-}
-
-interface Sa2Properties {
-    sa2_code: number;
-}
-
-interface Sa3Properties {
-    sa3_code: number;
-}
-
-interface Sa4Properties {
-    sa4_code: number;
-}
-
-type StatisticalAreaProperties =
-    | Sa1Properties
-    | Sa2Properties
-    | Sa3Properties
-    | Sa4Properties;
-
-type PropertiesForLevel<L extends StatisticalAreaLevel> =
-    L extends 1 ? Sa1Properties :
-    L extends 2 ? Sa2Properties :
-    L extends 3 ? Sa3Properties :
-    Sa4Properties;
-
-interface MultiPolygon {
-    type: "MultiPolygon";
-    coordinates: number[][][][];
-}
-
-interface Feature<
-    P extends StatisticalAreaProperties = StatisticalAreaProperties
-> {
-    type: "Feature";
-    id: number;
-    properties: P;
-    geometry: MultiPolygon;
-}
-
-interface FeatureCollection<
-    P extends StatisticalAreaProperties = StatisticalAreaProperties
-> {
-    type: "FeatureCollection";
-    features: Feature<P>[];
-}
-
-const INITIAL_CENTRE: [number, number] = [133.7751, -25.2744];
-const CACHE_MOVE_THRESHOLDS: Record<StatisticalAreaLevel, number> = {1:0.5, 2:1, 3:2, 4:4};
-const POLYGON_SOURCE = "statistical-areas";
 const POLYGON_FILL_LAYER = "statistical-areas-fill";
 const POLYGON_OUTLINE_LAYER = "statistical-areas-outline";
 
 let statisticalAreaLevel: StatisticalAreaLevel = 4;
-let lastCacheCentre: [number, number] = INITIAL_CENTRE
 let zoomingCacheUpdatePending = false;
 
-function getStatisticalAreaLevel(
-    zoom: number
-): StatisticalAreaLevel {
-
-    if (zoom < 6.0) {
-        return 4;
-    }
-
-    if (zoom < 8.0) {
-        return 3;
-    }
-
-    if (zoom < 11.0) {
-        return 2;
-    }
-
-    return 1;
-}
-
-async function getTilemapCache<L extends StatisticalAreaLevel>(
-    level: L,
-    longitude: number,
-    latitude: number,
-): Promise<FeatureCollection<PropertiesForLevel<L>>> {
-
-    const response = await fetch(
-        `/tilemap-cache?x=${longitude}&y=${latitude}&level=${level}`
-    );
-
-    if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
-    }
-
-    return await response.json() as FeatureCollection<
-        PropertiesForLevel<L>
-    >;
-}
-
-function setPolygonData(
+function showStatisticalAreaPopup(
     map: maplibregl.Map,
-    data: FeatureCollection,
+    event: maplibregl.MapMouseEvent & {
+        features?: maplibregl.MapGeoJSONFeature[];
+    },
 ): void {
-    const source = map.getSource(
-        POLYGON_SOURCE
-    ) as maplibregl.GeoJSONSource | undefined;
+    const feature = event.features?.[0];
 
-    if (!source) {
-        throw new Error(
-            `MapLibre source '${POLYGON_SOURCE}' does not exist`
-        );
-    }
-
-    source.setData(data);
-}
-
-async function loadTileCache(
-    map: maplibregl.Map,
-    level: StatisticalAreaLevel,
-    longitude: number,
-    latitude: number,
-): Promise<void> {
-
-    console.log(
-        `Loading SA${level} cache at ${longitude}, ${latitude}`
-    );
-
-    const data = await getTilemapCache(
-        level,
-        longitude,
-        latitude,
-    );
-
-    console.log(
-        `Received ${data.features.length} unique polygons`
-    );
-
-    setPolygonData(map, data);
-
-    lastCacheCentre[0] = longitude;
-    lastCacheCentre[1] = latitude;
-}
-
-async function updateTileCache(
-    map: maplibregl.Map,
-    level: StatisticalAreaLevel,
-    longitude: number,
-    latitude: number,
-): Promise<void> {
-
-    const longitudeDifference = Math.abs(
-        longitude - lastCacheCentre[0]
-    );
-
-    const latitudeDifference = Math.abs(
-        latitude - lastCacheCentre[1]
-    );
-
-    if (
-        longitudeDifference < CACHE_MOVE_THRESHOLDS[level] &&
-        latitudeDifference < CACHE_MOVE_THRESHOLDS[level]
-    ) {
+    if (!feature) {
         return;
     }
 
-    await loadTileCache(
-        map,
-        level,
-        longitude,
-        latitude,
-    );
+    const codeProperty = `sa${statisticalAreaLevel}_code`;
+
+    const properties = feature.properties as Record<
+        string,
+        string | number | null
+    >;
+
+    const code = properties[codeProperty];
+
+    if (code === undefined || code === null) {
+        return;
+    }
+
+    new maplibregl.Popup()
+        .setLngLat(event.lngLat)
+        .setHTML(`
+            <strong>SA${statisticalAreaLevel}</strong><br>
+            Code: ${code}
+        `)
+        .addTo(map);
 }
 
 async function main(): Promise<void> {
@@ -213,6 +89,18 @@ async function main(): Promise<void> {
                 "line-color": "#ffffff",
                 "line-width": 1,
             },
+        });
+    
+        map.on("click", POLYGON_FILL_LAYER, (event) => {
+            showStatisticalAreaPopup(map, event);
+        });
+    
+        map.on("mouseenter", POLYGON_FILL_LAYER, () => {
+            map.getCanvas().style.cursor = "pointer";
+        });
+    
+        map.on("mouseleave", POLYGON_FILL_LAYER, () => {
+            map.getCanvas().style.cursor = "";
         });
 
         await loadTileCache(
