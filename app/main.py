@@ -254,20 +254,19 @@ def get_tilemap_cache():
                 tiles.append(f"{x}_{y}")
 
     query = f"""
-        SELECT DISTINCT ON (p.gid)
+        SELECT
             p.gid,
             p.sa{level}_code21,
-            ST_AsGeoJSON(
-                ST_SimplifyPreserveTopology(
-                    ST_Transform(p.geom, 4326),
-                    {simplification_level[level]}
-                )
-            )::json AS geometry
-        FROM sa{level}_2021_tilemap_polygons tp
+            geometry_simplified AS geometry
+        FROM (SELECT DISTINCT polygon_gid
+              FROM sa{level}_2021_tilemap_polygons tp
+              WHERE tp.tile_id = ANY(%s)
+              ) tp
         JOIN sa{level}_2021 p
             ON p.gid = tp.polygon_gid
-        WHERE tp.tile_id = ANY(%s);
     """
+
+    app.logger.info(query)
 
     app.logger.info("Connecting to database")
 
@@ -284,7 +283,11 @@ def get_tilemap_cache():
                 len(rows)
             )
 
+    app.logger.info("query complete")
+
     features = []
+
+    app.logger.info("building geojson")
 
     for gid, code, geometry in rows:
         features.append({
@@ -295,6 +298,8 @@ def get_tilemap_cache():
             },
             "geometry": geometry
         })
+
+    app.logger.info("finished geojsonifying")
 
     return jsonify({
         "type": "FeatureCollection",
